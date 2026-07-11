@@ -3,7 +3,7 @@ use anyhow::Result;
 use tiberius::Client;
 use tokio::net::TcpStream;
 use tokio_util::compat::Compat;
-use crate::models::stock::CompatibleChute;
+use crate::models::stock::{CompatibleChute, ChuteInfo};
 
 pub struct StockRepository;
 
@@ -56,5 +56,34 @@ impl StockRepository {
             return Ok(id);
         }
         Err(anyhow::anyhow!("Failed to add chute"))
+    }
+
+    pub async fn get_stock_chutes(client: &mut Client<Compat<TcpStream>>) -> Result<Vec<ChuteInfo>> {
+        let sql = "
+            SELECT 
+                c.ChuteID,
+                CONVERT(varchar, c.DateCreation, 23) as DateCreation,
+                m.Reference,
+                m.Designation,
+                CAST(c.LongueurRestante AS FLOAT) as LongueurRestante,
+                c.Statut
+            FROM StockChutes c
+            JOIN Materiau m ON c.MateriauID = m.MateriauID
+            ORDER BY c.DateCreation DESC, c.ChuteID DESC
+        ";
+        let stream = client.query(sql, &[]).await?;
+        let rows = stream.into_first_result().await?;
+        let mut list = Vec::new();
+        for row in rows {
+            list.push(ChuteInfo {
+                chute_id: row.get("ChuteID").unwrap(),
+                date_creation: row.get::<&str, _>("DateCreation").unwrap_or("").to_string(),
+                reference: row.get::<&str, _>("Reference").unwrap_or("").to_string(),
+                designation: row.get::<&str, _>("Designation").unwrap_or("").to_string(),
+                longueur_restante: row.get::<f64, _>("LongueurRestante").unwrap_or(0.0),
+                statut: row.get::<&str, _>("Statut").unwrap_or("").to_string(),
+            });
+        }
+        Ok(list)
     }
 }

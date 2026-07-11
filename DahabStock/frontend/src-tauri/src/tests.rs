@@ -144,4 +144,41 @@ mod integration_tests {
         let qty: i32 = rows.first().unwrap().get("QuantiteDisponible").unwrap();
         assert_eq!(qty, 10);
     }
+
+    #[tokio::test]
+    async fn test_6_reception_stock() {
+        let mut client = get_connection().await.unwrap();
+        let materiau_id = setup_db(&mut client).await.unwrap();
+
+        // Ensure fournisseur exists
+        client.execute("IF NOT EXISTS (SELECT * FROM Fournisseur WHERE FournisseurID=1) BEGIN SET IDENTITY_INSERT Fournisseur ON; INSERT INTO Fournisseur (FournisseurID, CodeFournisseur, Nom) VALUES (1, 100, 'Sté Bechar Aluminium'); SET IDENTITY_INSERT Fournisseur OFF; END", &[]).await.unwrap();
+
+        client.simple_query("BEGIN TRAN").await.unwrap();
+        
+        let payload = crate::models::reception::BonReceptionPayload {
+            fournisseur_id: 1,
+            numero_br: "006629/26".to_string(),
+            lignes: vec![
+                crate::models::reception::LigneReceptionPayload {
+                    materiau_id,
+                    quantite_recue: 5.0,
+                    prix_achat: 150.0,
+                }
+            ]
+        };
+
+        crate::services::reception_service::ReceptionService::receive_stock(&mut client, payload).await.unwrap();
+        
+        client.simple_query("COMMIT TRAN").await.unwrap();
+
+        // Check StockPrincipal
+        let rows = client.query("SELECT QuantiteDisponible FROM StockPrincipal WHERE MateriauID=@p1", &[&materiau_id]).await.unwrap().into_first_result().await.unwrap();
+        let qty: i32 = rows.first().unwrap().get("QuantiteDisponible").unwrap();
+        assert_eq!(qty, 5); // Should be 5
+
+        // Check MouvementStock
+        let rows = client.query("SELECT COUNT(*) as Cnt FROM MouvementStock WHERE MateriauID=@p1 AND TypeMouvement='Entree_Fournisseur'", &[&materiau_id]).await.unwrap().into_first_result().await.unwrap();
+        let cnt: i32 = rows.first().unwrap().get("Cnt").unwrap();
+        assert_eq!(cnt, 1);
+    }
 }
