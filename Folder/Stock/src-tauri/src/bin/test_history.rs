@@ -1,4 +1,4 @@
-use frontend_lib::database::connection::get_connection;
+use dahabstock_lib::database::connection::get_connection;
 use tokio;
 
 #[tokio::main]
