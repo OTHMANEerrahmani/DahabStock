@@ -22,16 +22,16 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Installer les dépendances NPM
-        working-directory: ./DahabStock/frontend
+        working-directory: ./Folder/Stock
         run: npm install
 
       - name: Compiler l'application Tauri (Windows MSI)
-        working-directory: ./DahabStock/frontend
+        working-directory: ./Folder/Stock
         run: npm run tauri build
 
       - name: Uploader l'installeur (Artefact)
         uses: actions/upload-artifact@v4
         with:
           name: DahabStock-Windows-Installer
-          path: DahabStock/frontend/src-tauri/target/release/bundle/msi/*.msi
+          path: Folder/Stock/src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error
