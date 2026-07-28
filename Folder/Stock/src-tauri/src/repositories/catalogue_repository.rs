@@ -55,7 +55,7 @@ impl CatalogueRepository {
             LEFT JOIN ArticleStandard a ON m.MateriauID = a.MateriauID
             LEFT JOIN BarreAluminium b ON m.MateriauID = b.MateriauID
             LEFT JOIN StockPrincipal sp ON m.MateriauID = sp.MateriauID
-            ORDER BY m.Reference ASC
+            ORDER BY ISNULL(sp.QuantiteDisponible, 0) DESC, m.Reference ASC
         ";
         let stream = client.query(sql, &[]).await?;
         let rows = stream.into_first_result().await?;

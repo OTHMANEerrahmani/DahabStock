@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
-import { Package, AlertCircle, Scissors, TrendingDown, Trash2 } from 'lucide-react';
+import { Package, AlertCircle, Scissors, TrendingDown, Trash2, Wallet, Layers, Component } from 'lucide-react';
 
 interface DashboardStats {
   total_materiaux: number;
@@ -8,6 +9,8 @@ interface DashboardStats {
   total_chutes: number;
   consommations_aujourdhui: number;
   pertes_aujourdhui: number;
+  valeur_accessoires: number;
+  valeur_barres: number;
 }
 
 interface PythonResponse {
@@ -68,45 +71,94 @@ export default function Dashboard() {
     <div>
       <h2 className="page-title">Dashboard</h2>
       
+      {/* Premium ERP Financial Cards */}
+      <div className="financial-grid">
+        <div className="stat-card-finance theme-blue">
+          <div className="stat-card-finance-header">
+            <span>Valeur Accessoires</span>
+            <div className="icon-finance"><Component size={28} strokeWidth={2.5} /></div>
+          </div>
+          <div className="stat-card-finance-value">
+            {stats?.valeur_accessoires != null 
+              ? <>{new Intl.NumberFormat('fr-DZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.valeur_accessoires)} <span className="currency-label">MAD</span></>
+              : <>0,00 <span className="currency-label">MAD</span></>}
+          </div>
+        </div>
+
+        <div className="stat-card-finance theme-yellow">
+          <div className="stat-card-finance-header">
+            <span>Valeur Barres Aluminium</span>
+            <div className="icon-finance"><Layers size={28} strokeWidth={2.5} /></div>
+          </div>
+          <div className="stat-card-finance-value">
+            {stats?.valeur_barres != null 
+              ? <>{new Intl.NumberFormat('fr-DZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.valeur_barres)} <span className="currency-label">MAD</span></>
+              : <>0,00 <span className="currency-label">MAD</span></>}
+          </div>
+        </div>
+
+        <div className="stat-card-finance theme-green">
+          <div className="stat-card-finance-header">
+            <span>Valeur Totale du Stock</span>
+            <div className="icon-finance"><Wallet size={28} strokeWidth={2.5} /></div>
+          </div>
+          <div className="stat-card-finance-value">
+            {stats?.valeur_accessoires != null && stats?.valeur_barres != null
+              ? <>{new Intl.NumberFormat('fr-DZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.valeur_accessoires + stats.valeur_barres)} <span className="currency-label">MAD</span></>
+              : <>0,00 <span className="currency-label">MAD</span></>}
+          </div>
+        </div>
+      </div>
+
+      {/* Standard Stats Grid */}
       <div className="dashboard-grid">
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span>Nombre de Matériaux</span>
-            <div className="icon-wrapper"><Package className="icon-blue" size={24} /></div>
+        <div className="stat-card-finance">
+          <div className="stat-card-finance-header">
+            <span>Nombre total de références</span>
+            <div className="icon-wrapper blue"><Package size={24} /></div>
           </div>
-          <div className="stat-card-value">{stats?.total_materiaux || 0}</div>
+          <div className="stat-card-finance-value">{stats?.total_materiaux || 0}</div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-card-header">
+        <div className="stat-card-finance">
+          <div className="stat-card-finance-header">
             <span>Stock Faible</span>
-            <div className="icon-wrapper"><AlertCircle className="icon-red" size={24} /></div>
+            <div className="icon-wrapper red"><AlertCircle size={24} /></div>
           </div>
-          <div className="stat-card-value">{stats?.stock_faible || 0}</div>
+          <div className="stat-card-finance-value">
+            {stats?.stock_faible || 0}
+            <span className="stat-card-subtitle">articles à réapprovisionner</span>
+          </div>
+          <div style={{ marginTop: 'auto', textAlign: 'right' }}>
+            <Link to="/catalogue" className="btn-voir">Voir</Link>
+          </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span>Nombre de Chutes</span>
-            <div className="icon-wrapper"><Scissors className="icon-yellow" size={24} /></div>
+        <div className="stat-card-finance">
+          <div className="stat-card-finance-header">
+            <span>Stock des chutes</span>
+            <div className="icon-wrapper yellow"><Scissors size={24} /></div>
           </div>
-          <div className="stat-card-value">{stats?.total_chutes || 0}</div>
+          <div className="stat-card-finance-value">
+            {stats?.total_chutes || 0}
+            <span className="stat-card-subtitle">chutes disponibles</span>
+          </div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span>Consommations (Auj.)</span>
-            <div className="icon-wrapper"><TrendingDown className="icon-green" size={24} /></div>
+        <div className="stat-card-finance">
+          <div className="stat-card-finance-header">
+            <span>Consommations aujourd'hui</span>
+            <div className="icon-wrapper blue"><TrendingDown size={24} /></div>
           </div>
-          <div className="stat-card-value">{stats?.consommations_aujourdhui || 0}</div>
+          <div className="stat-card-finance-value">{stats?.consommations_aujourdhui || 0}</div>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-card-header">
-            <span>Pertes (Auj.)</span>
-            <div className="icon-wrapper"><Trash2 className="icon-purple" size={24} /></div>
+        <div className="stat-card-finance">
+          <div className="stat-card-finance-header">
+            <span>Pertes aujourd'hui</span>
+            <div className="icon-wrapper red"><Trash2 size={24} /></div>
           </div>
-          <div className="stat-card-value">{stats?.pertes_aujourdhui || 0}</div>
+          <div className="stat-card-finance-value">{stats?.pertes_aujourdhui || 0}</div>
         </div>
       </div>
     </div>
