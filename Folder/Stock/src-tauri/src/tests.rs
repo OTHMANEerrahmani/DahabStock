@@ -2,7 +2,7 @@
 mod integration_tests {
     use crate::database::connection::get_connection;
     use crate::services::consumption_service::ConsumptionService;
-    use crate::services::loss_service::LossService;
+    use crate::services::perte_service::PerteService;
     use tiberius::Client;
     use tokio::net::TcpStream;
     use tokio_util::compat::Compat;
@@ -38,7 +38,7 @@ mod integration_tests {
 
         // Must run inside transaction if BLL requires atomicity, but our BLL runs separate queries. Let's wrap it.
         client.simple_query("BEGIN TRAN").await.unwrap();
-        let res = ConsumptionService::consume_barre(&mut client, 1, materiau_id, 1.5).await;
+        let res = ConsumptionService::consume_barre(&mut client, 1, materiau_id, 1.5, "", None).await;
         if res.is_ok() {
             client.simple_query("COMMIT TRAN").await.unwrap();
         } else {
@@ -63,7 +63,7 @@ mod integration_tests {
         client.execute("INSERT INTO StockPrincipal (MateriauID, QuantiteDisponible, Statut) VALUES (@p1, 10, 'Actif')", &[&materiau_id]).await.unwrap();
 
         client.simple_query("BEGIN TRAN").await.unwrap();
-        ConsumptionService::consume_barre(&mut client, 1, materiau_id, 4.0).await.unwrap();
+        ConsumptionService::consume_barre(&mut client, 1, materiau_id, 4.0, "", None).await.unwrap();
         client.simple_query("COMMIT TRAN").await.unwrap();
 
         let rows = client.query("SELECT QuantiteDisponible FROM StockPrincipal WHERE MateriauID=@p1", &[&materiau_id]).await.unwrap().into_first_result().await.unwrap();
@@ -84,7 +84,7 @@ mod integration_tests {
         client.execute("INSERT INTO StockPrincipal (MateriauID, QuantiteDisponible, Statut) VALUES (@p1, 10, 'Actif')", &[&materiau_id]).await.unwrap();
 
         client.simple_query("BEGIN TRAN").await.unwrap();
-        ConsumptionService::consume_barre(&mut client, 1, materiau_id, 6.0).await.unwrap();
+        ConsumptionService::consume_barre(&mut client, 1, materiau_id, 6.0, "", None).await.unwrap();
         client.simple_query("COMMIT TRAN").await.unwrap();
 
         let rows = client.query("SELECT QuantiteDisponible FROM StockPrincipal WHERE MateriauID=@p1", &[&materiau_id]).await.unwrap().into_first_result().await.unwrap();
@@ -104,7 +104,7 @@ mod integration_tests {
         client.execute("INSERT INTO StockPrincipal (MateriauID, QuantiteDisponible, Statut) VALUES (@p1, 100, 'Actif')", &[&materiau_id]).await.unwrap();
 
         client.simple_query("BEGIN TRAN").await.unwrap();
-        LossService::declare_loss(&mut client, materiau_id, 2, "StockPrincipal", "Casse Rust", None).await.unwrap();
+        PerteService::declare_perte_barre(&mut client, materiau_id, 2.0, "Casse Rust").await.unwrap();
         client.simple_query("COMMIT TRAN").await.unwrap();
 
         let rows = client.query("SELECT QuantiteDisponible FROM StockPrincipal WHERE MateriauID=@p1", &[&materiau_id]).await.unwrap().into_first_result().await.unwrap();

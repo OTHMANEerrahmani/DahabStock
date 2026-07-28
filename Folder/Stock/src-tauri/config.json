@@ -1,5 +1,5 @@
 {
-  "db_host": "192.168.0.2",
+  "db_host": "192.168.100.16",
   "db_port": 1433,
   "db_name": "DahabStock",
   "db_user": "sa",
