@@ -104,7 +104,7 @@ export default function Consommation() {
   if (modalMode === 'principal') {
     if (!isBarre && valeur === '') {
       valeurError = 'Veuillez saisir la quantité.';
-    } else if (!isBarre && valeur <= 0) {
+    } else if (!isBarre && (valeur as number) <= 0) {
       valeurError = 'La valeur doit être > 0.';
     }
   }
@@ -154,7 +154,7 @@ export default function Consommation() {
       if (isBarre) {
         payload.quantite = quantiteBarres;
       } else {
-        payload.quantite = valeur;
+        payload.quantite = valeur as number;
       }
 
       const response: string = await invoke(commandName, { payload: JSON.stringify(payload) });

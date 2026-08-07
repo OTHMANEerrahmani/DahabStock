@@ -75,7 +75,7 @@ export default function StockChutes() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!materiauRef.trim() || !longueur || longueur <= 0 || longueur >= 6) {
+    if (!materiauRef.trim() || typeof longueur !== 'number' || longueur <= 0 || longueur >= 6) {
       setStatus({ type: 'error', msg: 'Veuillez remplir correctement la référence et la longueur (< 6m).' });
       return;
     }
@@ -92,7 +92,7 @@ export default function StockChutes() {
     try {
       let payload = {
         materiau_id: selectedMateriau.materiau_id,
-        longueur_restante: longueur,
+        longueur_restante: longueur as number,
         quantite: quantite,
         categorie_emplacement: categorie.trim() || undefined
       };
