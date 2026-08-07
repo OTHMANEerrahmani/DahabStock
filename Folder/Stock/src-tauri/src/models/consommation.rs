@@ -21,6 +21,21 @@ pub struct ConsommationBarrePayload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct LigneConsommationPayload {
+    pub type_materiau: String,
+    pub materiau_id: i32,
+    pub quantite: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConsommationMultiPayload {
+    pub code_projet: String,
+    pub preneur: String,
+    pub date_consommation: String,
+    pub lignes: Vec<LigneConsommationPayload>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ConsommationStandardPayload {
     pub code_projet: String,
     pub materiau_id: i32,
@@ -50,4 +65,10 @@ pub struct HistoriqueConsommation {
     pub cout_total: f64,
     pub source: String,
     pub operation_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SubmitConsommationResponse {
+    pub message: String,
+    pub operation_id: String,
 }

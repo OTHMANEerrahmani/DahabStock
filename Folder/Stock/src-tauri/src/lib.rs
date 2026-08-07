@@ -9,7 +9,7 @@ pub mod utils;
 use controllers::dashboard::get_dashboard_stats;
 use controllers::reception::{get_fournisseurs, get_materiaux, submit_reception, add_fournisseur, get_historique_receptions, update_prix_reception};
 use controllers::catalogue::{get_catalogue_complet, add_article_standard, add_barre_aluminium};
-use controllers::consommation::{get_projets, get_historique_consommations, submit_consommation_barre, submit_consommation_standard, submit_consommation_chute, get_consommations_by_projet};
+use controllers::consommation::{get_projets, get_historique_consommations, submit_consommation_barre, submit_consommation_standard, submit_consommation_multi, submit_consommation_chute, get_consommations_by_projet};
 use controllers::stock::{get_stock_chutes, add_chute_manually};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,6 +32,7 @@ pub fn run() {
             controllers::consommation::get_consommations_by_projet,
             controllers::consommation::submit_consommation_barre,
             controllers::consommation::submit_consommation_standard,
+            controllers::consommation::submit_consommation_multi,
             controllers::consommation::submit_consommation_chute,
             controllers::perte::submit_perte,
             controllers::perte::get_historique_pertes,

@@ -502,3 +502,38 @@ tr:hover td {
   justify-content: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
+
+/* Print Styles */
+@media print {
+  @page {
+    margin: 1cm;
+    size: A4;
+  }
+  
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  .sidebar,
+  .print-hide {
+    display: none !important;
+  }
+  
+  .main-content {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+  
+  /* Reset some styles for printing */
+  * {
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
