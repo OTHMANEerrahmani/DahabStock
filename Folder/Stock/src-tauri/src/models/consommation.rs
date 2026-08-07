@@ -15,9 +15,9 @@ pub struct Consommation {
 pub struct ConsommationBarrePayload {
     pub code_projet: String,
     pub materiau_id: i32,
-    pub longueur_a_couper: f64,
     pub quantite: i32,
     pub preneur: String,
+    pub date_consommation: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,6 +26,15 @@ pub struct ConsommationStandardPayload {
     pub materiau_id: i32,
     pub quantite: i32,
     pub preneur: String,
+    pub date_consommation: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ConsommationChutePayload {
+    pub code_projet: String,
+    pub chute_id: i32,
+    pub preneur: String,
+    pub date_consommation: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -39,5 +48,6 @@ pub struct HistoriqueConsommation {
     pub longueur_utilisee: f64,
     pub preneur: String,
     pub cout_total: f64,
+    pub source: String,
     pub operation_id: Option<String>,
 }

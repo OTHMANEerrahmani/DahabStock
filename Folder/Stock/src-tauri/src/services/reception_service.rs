@@ -12,7 +12,7 @@ pub struct ReceptionService;
 
 impl ReceptionService {
     pub async fn receive_stock(client: &mut Client<Compat<TcpStream>>, payload: BonReceptionPayload) -> Result<()> {
-        let br_id = ReceptionRepository::create_bon_reception(client, payload.fournisseur_id, &payload.numero_br).await?;
+        let br_id = ReceptionRepository::create_bon_reception(client, payload.fournisseur_id, &payload.numero_br, &payload.date_reception).await?;
         
         for ligne in payload.lignes {
             ReceptionRepository::create_ligne_reception(client, br_id, ligne.materiau_id, ligne.quantite_recue, ligne.prix_achat).await?;

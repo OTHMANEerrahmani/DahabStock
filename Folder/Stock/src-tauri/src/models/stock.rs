@@ -16,4 +16,15 @@ pub struct ChuteInfo {
     pub couleur: Option<String>,
     pub longueur_restante: f64,
     pub statut: String,
+    pub client_origine: Option<String>,
+    pub categorie_emplacement: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AddChutePayload {
+    pub materiau_id: i32,
+    pub code_projet: Option<String>,
+    pub longueur_restante: f64,
+    pub quantite: Option<i32>,
+    pub categorie_emplacement: Option<String>,
 }

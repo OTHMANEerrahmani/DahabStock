@@ -46,6 +46,7 @@ export default function EntreeStock() {
   
   const [fournisseurNom, setFournisseurNom] = useState<string>('');
   const [numeroBR, setNumeroBR] = useState<string>('');
+  const [dateReception, setDateReception] = useState<string>(new Date().toISOString().split('T')[0]);
   const [lignes, setLignes] = useState<LigneReception[]>([{ id: Date.now(), materiau_ref: '', couleur: '', quantite_recue: 1, prix_achat: 0 }]);
   
   const [status, setStatus] = useState<{type: 'success'|'error', msg: string} | null>(null);
@@ -182,6 +183,7 @@ export default function EntreeStock() {
       const payload = {
         fournisseur_id: finalFournisseurId,
         numero_br: numeroBR,
+        date_reception: dateReception,
         lignes: finalLignes
       };
       const response: string = await invoke('submit_reception', { payloadStr: JSON.stringify(payload) });
@@ -191,6 +193,7 @@ export default function EntreeStock() {
         setStatus({ type: 'success', msg: parsed.data });
         setNumeroBR('');
         setFournisseurNom('');
+        setDateReception(new Date().toISOString().split('T')[0]);
         setLignes([{ id: Date.now(), materiau_ref: '', couleur: '', quantite_recue: 1, prix_achat: 0 }]);
         setTimeout(() => {
           setIsModalOpen(false);
@@ -355,7 +358,7 @@ export default function EntreeStock() {
             )}
 
             <form onSubmit={handleSubmit}>
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2.5rem'}}>
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem', marginBottom: '2.5rem'}}>
                 <div>
                   <label>Fournisseur</label>
                   <input 
@@ -378,6 +381,16 @@ export default function EntreeStock() {
                     value={numeroBR} 
                     onChange={e => setNumeroBR(e.target.value)}
                     placeholder="Ex: 006629/26"
+                  />
+                </div>
+                <div>
+                  <label>Date d'entrée</label>
+                  <input 
+                    type="date" 
+                    value={dateReception} 
+                    onChange={e => setDateReception(e.target.value)}
+                    required
+                    style={{width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '0.95rem'}}
                   />
                 </div>
               </div>

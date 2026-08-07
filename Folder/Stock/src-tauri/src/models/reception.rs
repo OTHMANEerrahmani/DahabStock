@@ -26,6 +26,7 @@ pub struct LigneReceptionPayload {
 pub struct BonReceptionPayload {
     pub fournisseur_id: i32,
     pub numero_br: String,
+    pub date_reception: String,
     pub lignes: Vec<LigneReceptionPayload>,
 }
 

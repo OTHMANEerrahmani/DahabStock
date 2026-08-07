@@ -17,10 +17,21 @@ impl ConsommationRepository {
         chute_id: Option<i32>,
         preneur: &str,
         source: &str,
-        operation_id: Option<&str>
+        operation_id: Option<&str>,
+        date_operation: &str
     ) -> Result<i32> {
-        let sql = "INSERT INTO Consommation (ProjetID, MateriauID, DateOperation, QuantiteUtilisee, LongueurUtilisee, ChuteID, Preneur, SourceConsommation, OperationID) OUTPUT INSERTED.ConsommationID VALUES (@p1, @p2, GETDATE(), @p3, @p4, @p5, @p6, @p7, @p8)";
-        let stream = client.query(sql, &[&projet_id, &materiau_id, &qte, &longueur, &chute_id, &preneur, &source, &operation_id]).await?;
+        let sql = if date_operation.is_empty() {
+            "INSERT INTO Consommation (ProjetID, MateriauID, DateOperation, QuantiteUtilisee, LongueurUtilisee, ChuteID, Preneur, SourceConsommation, OperationID) OUTPUT INSERTED.ConsommationID VALUES (@p1, @p2, GETDATE(), @p3, @p4, @p5, @p6, @p7, @p8)"
+        } else {
+            "INSERT INTO Consommation (ProjetID, MateriauID, DateOperation, QuantiteUtilisee, LongueurUtilisee, ChuteID, Preneur, SourceConsommation, OperationID) OUTPUT INSERTED.ConsommationID VALUES (@p1, @p2, TRY_CAST(@p9 AS DATETIME), @p3, @p4, @p5, @p6, @p7, @p8)"
+        };
+        
+        let stream = if date_operation.is_empty() {
+            client.query(sql, &[&projet_id, &materiau_id, &qte, &longueur, &chute_id, &preneur, &source, &operation_id]).await?
+        } else {
+            client.query(sql, &[&projet_id, &materiau_id, &qte, &longueur, &chute_id, &preneur, &source, &operation_id, &date_operation]).await?
+        };
+        
         let rows = stream.into_first_result().await?;
         if let Some(row) = rows.first() {
             let id: i32 = row.get("ConsommationID").unwrap();
@@ -47,6 +58,7 @@ impl ConsommationRepository {
                         ELSE 0 
                     END
                 AS FLOAT) as CoutTotal,
+                ISNULL(c.SourceConsommation, 'Stock principal') as Source,
                 CAST(c.OperationID AS NVARCHAR(50)) as OperationID
             FROM Consommation c
             JOIN Materiau m ON c.MateriauID = m.MateriauID
@@ -69,6 +81,7 @@ impl ConsommationRepository {
                 longueur_utilisee: row.get::<f64, _>("LongueurUtilisee").unwrap_or(0.0),
                 preneur: row.get::<&str, _>("Preneur").unwrap_or("").to_string(),
                 cout_total: row.get::<f64, _>("CoutTotal").unwrap_or(0.0),
+                source: row.get::<&str, _>("Source").unwrap_or("Stock principal").to_string(),
                 operation_id: row.get::<&str, _>("OperationID").map(|s| s.to_string()),
             });
         }
@@ -93,6 +106,7 @@ impl ConsommationRepository {
                         ELSE 0 
                     END
                 AS FLOAT) as CoutTotal,
+                ISNULL(c.SourceConsommation, 'Stock principal') as Source,
                 CAST(c.OperationID AS NVARCHAR(50)) as OperationID
             FROM Consommation c
             JOIN Materiau m ON c.MateriauID = m.MateriauID
@@ -116,6 +130,7 @@ impl ConsommationRepository {
                 longueur_utilisee: row.get::<f64, _>("LongueurUtilisee").unwrap_or(0.0),
                 preneur: row.get::<&str, _>("Preneur").unwrap_or("").to_string(),
                 cout_total: row.get::<f64, _>("CoutTotal").unwrap_or(0.0),
+                source: row.get::<&str, _>("Source").unwrap_or("Stock principal").to_string(),
                 operation_id: row.get::<&str, _>("OperationID").map(|s| s.to_string()),
             });
         }

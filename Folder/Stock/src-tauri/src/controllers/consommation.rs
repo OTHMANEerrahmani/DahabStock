@@ -7,7 +7,7 @@ pub struct ApiResponse<T> {
     pub data: Option<T>,
     pub error: Option<String>,
 }
-use crate::models::consommation::{ConsommationBarrePayload, ConsommationStandardPayload};
+use crate::models::consommation::{ConsommationBarrePayload, ConsommationStandardPayload, ConsommationChutePayload};
 use crate::repositories::projet_repository::ProjetRepository;
 use crate::repositories::consommation_repository::ConsommationRepository;
 use crate::services::consumption_service::ConsumptionService;
@@ -55,7 +55,7 @@ pub async fn submit_consommation_barre(payload: String) -> Result<String, String
     client.simple_query("BEGIN TRAN").await.map_err(|e| crate::utils::format_sql_error(&e.to_string()))?;
     
     for _ in 0..data.quantite {
-        if let Err(e) = ConsumptionService::consume_barre(&mut client, projet_id, data.materiau_id, data.longueur_a_couper, &data.preneur, Some(&operation_id)).await {
+        if let Err(e) = ConsumptionService::consume_barre(&mut client, projet_id, data.materiau_id, 1, &data.preneur, Some(&operation_id), &data.date_consommation).await {
             let _ = client.simple_query("ROLLBACK TRAN").await;
             let res: ApiResponse<()> = ApiResponse { status: "error".to_string(), data: None, error: Some(crate::utils::format_sql_error(&e.to_string())) };
             return Ok(serde_json::to_string(&res).unwrap());
@@ -75,9 +75,29 @@ pub async fn submit_consommation_standard(payload: String) -> Result<String, Str
     let projet_id = ProjetRepository::get_or_create_projet(&mut client, &data.code_projet).await.map_err(|e| crate::utils::format_sql_error(&e.to_string()))?;
     let operation_id = Uuid::new_v4().to_string();
     
-    match ConsumptionService::consume_standard(&mut client, projet_id, data.materiau_id, data.quantite as f64, &data.preneur, Some(&operation_id)).await {
+    match ConsumptionService::consume_standard(&mut client, projet_id, data.materiau_id, data.quantite as f64, &data.preneur, Some(&operation_id), &data.date_consommation).await {
         Ok(_) => {
             let res = ApiResponse { status: "success".to_string(), data: Some("Consommation enregistrée"), error: None };
+            Ok(serde_json::to_string(&res).unwrap())
+        },
+        Err(e) => {
+            let res: ApiResponse<()> = ApiResponse { status: "error".to_string(), data: None, error: Some(crate::utils::format_sql_error(&e.to_string())) };
+            Ok(serde_json::to_string(&res).unwrap())
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn submit_consommation_chute(payload: String) -> Result<String, String> {
+    let mut client = get_connection().await.map_err(|e| crate::utils::format_sql_error(&e.to_string()))?;
+    let data: ConsommationChutePayload = serde_json::from_str(&payload).map_err(|e| crate::utils::format_sql_error(&e.to_string()))?;
+    
+    let projet_id = ProjetRepository::get_or_create_projet(&mut client, &data.code_projet).await.map_err(|e| crate::utils::format_sql_error(&e.to_string()))?;
+    let operation_id = Uuid::new_v4().to_string();
+    
+    match ConsumptionService::consume_chute(&mut client, projet_id, data.chute_id, &data.preneur, Some(&operation_id), &data.date_consommation).await {
+        Ok(_) => {
+            let res = ApiResponse { status: "success".to_string(), data: Some("Chute consommée avec succès"), error: None };
             Ok(serde_json::to_string(&res).unwrap())
         },
         Err(e) => {

@@ -65,10 +65,11 @@ impl ReceptionRepository {
     pub async fn create_bon_reception(
         client: &mut Client<Compat<TcpStream>>,
         fournisseur_id: i32,
-        numero_br: &str
+        numero_br: &str,
+        date_reception: &str
     ) -> Result<i32> {
-        let sql = "INSERT INTO BonReception (FournisseurID, NumeroBR, DateImportation, Statut) OUTPUT INSERTED.BonReceptionID VALUES (@p1, @p2, GETDATE(), 'Validé')";
-        let stream = client.query(sql, &[&fournisseur_id, &numero_br]).await?;
+        let sql = "INSERT INTO BonReception (FournisseurID, NumeroBR, DateImportation, Statut) OUTPUT INSERTED.BonReceptionID VALUES (@p1, @p2, @p3, 'Validé')";
+        let stream = client.query(sql, &[&fournisseur_id, &numero_br, &date_reception]).await?;
         let rows = stream.into_first_result().await?;
         if let Some(row) = rows.first() {
             let id: i32 = row.get("BonReceptionID").unwrap();

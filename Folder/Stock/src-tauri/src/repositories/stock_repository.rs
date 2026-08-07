@@ -58,6 +58,17 @@ impl StockRepository {
         Err(anyhow::anyhow!("Failed to add chute"))
     }
 
+    pub async fn add_chute_manually(client: &mut Client<Compat<TcpStream>>, materiau_id: i32, length: f64, client_origine: Option<&str>, categorie: Option<&str>) -> Result<i32> {
+        let sql = "INSERT INTO StockChutes (MateriauID, LongueurRestante, DateCreation, Statut, CodeClientOrigine, CategorieEmplacement) OUTPUT INSERTED.ChuteID VALUES (@p1, @p2, GETDATE(), 'Disponible', @p3, @p4)";
+        let stream = client.query(sql, &[&materiau_id, &length, &client_origine, &categorie]).await?;
+        let rows = stream.into_first_result().await?;
+        if let Some(row) = rows.first() {
+            let id: i32 = row.get("ChuteID").unwrap();
+            return Ok(id);
+        }
+        Err(anyhow::anyhow!("Failed to add chute manually"))
+    }
+
     pub async fn get_stock_chutes(client: &mut Client<Compat<TcpStream>>) -> Result<Vec<ChuteInfo>> {
         let sql = "
             SELECT 
@@ -67,7 +78,9 @@ impl StockRepository {
                 m.Designation,
                 CAST(c.LongueurRestante AS FLOAT) as LongueurRestante,
                 c.Statut,
-                b.Couleur
+                b.Couleur,
+                CAST(c.CodeClientOrigine AS NVARCHAR(255)) as CodeClientOrigine,
+                CAST(c.CategorieEmplacement AS NVARCHAR(255)) as CategorieEmplacement
             FROM StockChutes c
             JOIN Materiau m ON c.MateriauID = m.MateriauID
             LEFT JOIN BarreAluminium b ON m.MateriauID = b.MateriauID
@@ -85,6 +98,8 @@ impl StockRepository {
                 couleur: row.get::<&str, _>("Couleur").map(|s| s.to_string()),
                 longueur_restante: row.get::<f64, _>("LongueurRestante").unwrap_or(0.0),
                 statut: row.get::<&str, _>("Statut").unwrap_or("").to_string(),
+                client_origine: row.get::<&str, _>("CodeClientOrigine").map(|s| s.to_string()),
+                categorie_emplacement: row.get::<&str, _>("CategorieEmplacement").map(|s| s.to_string()),
             });
         }
         Ok(list)

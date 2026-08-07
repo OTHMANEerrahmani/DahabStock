@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Scissors, CheckCircle, AlertCircle, X, Search, FileText } from 'lucide-react';
+import { Scissors, CheckCircle, AlertCircle, X, Search, Archive } from 'lucide-react';
 
 interface Projet {
   id: number;
@@ -15,7 +15,6 @@ interface CatalogueItem {
   type_item: string;
   categorie_ou_couleur: string;
   stock_actuel: number;
-  longueur_standard?: number;
 }
 
 interface HistoriqueConsommation {
@@ -28,23 +27,37 @@ interface HistoriqueConsommation {
   longueur_utilisee: number;
   preneur: string;
   cout_total: number;
+  source: string;
   operation_id?: string;
+}
+
+interface ChuteInfo {
+  chute_id: number;
+  date_creation: string;
+  reference: string;
+  designation: string;
+  couleur?: string;
+  longueur_restante: number;
+  statut: string;
 }
 
 export default function Consommation() {
   const [projets, setProjets] = useState<Projet[]>([]);
   const [materiaux, setMateriaux] = useState<CatalogueItem[]>([]);
   const [historique, setHistorique] = useState<HistoriqueConsommation[]>([]);
+  const [chutes, setChutes] = useState<ChuteInfo[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'principal' | 'chutes' | null>(null);
   
   const [projetCode, setProjetCode] = useState<string>('');
   const [materiauRef, setMateriauRef] = useState<string>('');
   const [couleur, setCouleur] = useState<string>('');
-  const [valeur, setValeur] = useState<number | ''>('');
+  const [valeur, setValeur] = useState<number | ''>(''); // Quantité standard
   const [quantiteBarres, setQuantiteBarres] = useState<number>(1); 
   const [preneur, setPreneur] = useState<string>('');
+  const [dateConsommation, setDateConsommation] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [selectedChuteId, setSelectedChuteId] = useState<number | ''>('');
   
   const [status, setStatus] = useState<{type: 'success'|'error', msg: string} | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +76,10 @@ export default function Consommation() {
         const resH: string = await invoke('get_historique_consommations');
         const parsedH = JSON.parse(resH);
         if (parsedH.status === 'success') setHistorique(parsedH.data);
+        
+        const resC: string = await invoke('get_stock_chutes');
+        const parsedC = JSON.parse(resC);
+        if (parsedC.status === 'success') setChutes(parsedC.data.filter((c: ChuteInfo) => c.statut === 'Disponible'));
       } catch (err) {
         console.error(err);
       } finally {
@@ -84,18 +101,14 @@ export default function Consommation() {
   const isInsuffisant = isBarre && selectedMateriau && quantiteBarres > stockDisponible;
 
   let valeurError = '';
-  if (valeur === '') {
-    valeurError = isBarre ? 'Veuillez saisir la longueur à couper.' : 'Veuillez saisir la quantité.';
-  } else if (valeur <= 0) {
-    valeurError = 'La valeur doit être > 0.';
-  } else if (isBarre) {
-    const maxLength = selectedMateriau?.longueur_standard || 6;
-    if (valeur > maxLength) {
-      valeurError = `La longueur ne peut pas dépasser la barre (${maxLength}m).`;
+  if (modalMode === 'principal') {
+    if (!isBarre && valeur === '') {
+      valeurError = 'Veuillez saisir la quantité.';
+    } else if (!isBarre && valeur <= 0) {
+      valeurError = 'La valeur doit être > 0.';
     }
   }
 
-  // Si on tape une nouvelle référence, on réinitialise la couleur
   useEffect(() => {
     if (matchingMateriaux.length > 0 && isBarre) {
       if (!matchingMateriaux.find(m => m.categorie_ou_couleur === couleur)) {
@@ -109,9 +122,9 @@ export default function Consommation() {
   const selectedProjet = projets.find(p => p.code_projet.toLowerCase() === projetCode.toLowerCase());
   const isProjetTermine = selectedProjet?.statut === 'Terminé';
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmitPrincipal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projetCode.trim() || !materiauRef.trim() || valeur === '' || valeurError !== '' || !preneur.trim() || (isBarre && quantiteBarres <= 0)) {
+    if (!projetCode.trim() || !materiauRef.trim() || (!isBarre && (valeur === '' || valeurError !== '')) || !preneur.trim() || (isBarre && quantiteBarres <= 0)) {
       setStatus({ type: 'error', msg: 'Veuillez remplir correctement tous les champs obligatoires.' });
       return;
     }
@@ -134,11 +147,11 @@ export default function Consommation() {
       let payload: any = {
         code_projet: projetCode,
         materiau_id: selectedMateriau.materiau_id,
-        preneur: preneur
+        preneur: preneur,
+        date_consommation: dateConsommation
       };
       
       if (isBarre) {
-        payload.longueur_a_couper = valeur;
         payload.quantite = quantiteBarres;
       } else {
         payload.quantite = valeur;
@@ -149,30 +162,7 @@ export default function Consommation() {
       
       if (parsed.status === 'success') {
         setStatus({ type: 'success', msg: parsed.data });
-        setMateriauRef('');
-        setCouleur('');
-        setValeur('');
-        setQuantiteBarres(1);
-        setPreneur('');
-        setTimeout(() => {
-          setIsModalOpen(false);
-          setStatus(null);
-          // Refetch history
-          invoke('get_historique_consommations').then((resH: any) => {
-            const parsedH = JSON.parse(resH);
-            if (parsedH.status === 'success') setHistorique(parsedH.data);
-          });
-          // Refetch projets in case a new one was created
-          invoke('get_projets').then((resP: any) => {
-             const parsedP = JSON.parse(resP);
-             if (parsedP.status === 'success') setProjets(parsedP.data);
-          });
-          // Refetch catalogue for updated stock
-          invoke('get_catalogue_complet').then((resM: any) => {
-            const parsedM = JSON.parse(resM);
-            if (parsedM.status === 'success') setMateriaux(parsedM.data);
-          });
-        }, 1500);
+        resetForm();
       } else {
         setStatus({ type: 'error', msg: parsed.error });
       }
@@ -183,9 +173,71 @@ export default function Consommation() {
     }
   };
 
+  const handleSubmitChute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!projetCode.trim() || selectedChuteId === '' || !preneur.trim() || !dateConsommation) {
+      setStatus({ type: 'error', msg: 'Veuillez remplir tous les champs obligatoires.' });
+      return;
+    }
+
+    setSubmitting(true);
+    setStatus(null);
+
+    try {
+      let payload = {
+        code_projet: projetCode,
+        chute_id: Number(selectedChuteId),
+        preneur: preneur,
+        date_consommation: dateConsommation
+      };
+
+      const response: string = await invoke('submit_consommation_chute', { payload: JSON.stringify(payload) });
+      const parsed = JSON.parse(response);
+      
+      if (parsed.status === 'success') {
+        setStatus({ type: 'success', msg: parsed.data });
+        resetForm();
+      } else {
+        setStatus({ type: 'error', msg: parsed.error });
+      }
+    } catch (err) {
+      setStatus({ type: 'error', msg: String(err) });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetForm = () => {
+    setMateriauRef('');
+    setCouleur('');
+    setValeur('');
+    setQuantiteBarres(1);
+    setPreneur('');
+    setSelectedChuteId('');
+    setTimeout(() => {
+      setModalMode(null);
+      setStatus(null);
+      invoke('get_historique_consommations').then((res: any) => {
+        const p = JSON.parse(res);
+        if (p.status === 'success') setHistorique(p.data);
+      });
+      invoke('get_projets').then((res: any) => {
+         const p = JSON.parse(res);
+         if (p.status === 'success') setProjets(p.data);
+      });
+      invoke('get_catalogue_complet').then((res: any) => {
+        const p = JSON.parse(res);
+        if (p.status === 'success') setMateriaux(p.data);
+      });
+      invoke('get_stock_chutes').then((res: any) => {
+        const p = JSON.parse(res);
+        if (p.status === 'success') setChutes(p.data.filter((c: ChuteInfo) => c.statut === 'Disponible'));
+      });
+    }, 1500);
+  };
+
   if (loading) return <div><h2 className="page-title">Consommation</h2><div className="loader"></div></div>;
 
-  // Générer la liste unique de matériaux pour le datalist (pour avoir la référence ET la désignation)
   const uniqueMateriaux = Array.from(new Map(materiaux.map(m => [m.reference, m])).values());
 
   const groupedHistorique: HistoriqueConsommation[] = [];
@@ -195,12 +247,9 @@ export default function Consommation() {
     if (h.operation_id) {
       if (!processedOpIds.has(h.operation_id)) {
         processedOpIds.add(h.operation_id);
-        
-        // Sum all items with this operation_id
         const group = historique.filter(item => item.operation_id === h.operation_id);
         const groupedItem = { ...h };
         groupedItem.quantite_utilisee = group.reduce((sum, item) => sum + item.quantite_utilisee, 0);
-        // We do NOT sum longueur_utilisee, because the user wants to see the length per bar e.g. "3 barres (6m)"
         groupedItem.cout_total = group.reduce((sum, item) => sum + item.cout_total, 0);
         groupedHistorique.push(groupedItem);
       }
@@ -212,32 +261,32 @@ export default function Consommation() {
   return (
     <div className="page-container" style={{maxWidth: '1000px', margin: '0 auto'}}>
       
-      <div style={{display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', marginBottom: '2.5rem'}}>
+      <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2.5rem'}}>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => setModalMode('principal')}
           className="glass-panel" 
-          style={{padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', cursor: 'pointer', margin: 0}}
+          style={{padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', cursor: 'pointer', margin: 0, border: '1px solid rgba(239, 68, 68, 0.3)'}}
         >
           <div className="icon-wrapper red">
             <Scissors size={28} />
           </div>
           <div style={{textAlign: 'left'}}>
-            <h3 style={{margin: '0 0 0.25rem 0', fontSize: '1.1rem', color: 'var(--danger-color)'}}>Nouvelle Consommation</h3>
-            <span style={{color: 'var(--text-secondary)', fontSize: '0.85rem'}}>Retirer du stock</span>
+            <h3 style={{margin: '0 0 0.25rem 0', fontSize: '1.1rem', color: 'var(--danger-color)'}}>Consommation du stock principal</h3>
+            <span style={{color: 'var(--text-secondary)', fontSize: '0.85rem'}}>Déduire du stock (barres entières ou standard)</span>
           </div>
         </button>
 
         <button 
+          onClick={() => setModalMode('chutes')}
           className="glass-panel" 
-          style={{padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', cursor: 'not-allowed', margin: 0, opacity: 0.6}}
-          disabled
+          style={{padding: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', cursor: 'pointer', margin: 0, border: '1px solid rgba(16, 185, 129, 0.3)'}}
         >
-          <div className="icon-wrapper" style={{backgroundColor: 'var(--input-bg)'}}>
-            <FileText size={28} color="var(--text-tertiary)" />
+          <div className="icon-wrapper" style={{backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#10b981'}}>
+            <Archive size={28} />
           </div>
           <div style={{textAlign: 'left'}}>
-            <h3 style={{margin: '0 0 0.25rem 0', fontSize: '1.1rem', color: 'var(--text-secondary)'}}>Importer une Demande (Excel)</h3>
-            <span style={{fontSize: '0.85rem', color: 'var(--text-tertiary)'}}>Extraction automatique (Bientôt)</span>
+            <h3 style={{margin: '0 0 0.25rem 0', fontSize: '1.1rem', color: '#10b981'}}>Consommation des chutes</h3>
+            <span style={{fontSize: '0.85rem', color: 'var(--text-secondary)'}}>Utiliser une chute disponible (stock principal inchangé)</span>
           </div>
         </button>
       </div>
@@ -261,7 +310,7 @@ export default function Consommation() {
               <th>Date</th>
               <th>Projet</th>
               <th>Référence</th>
-              <th>Désignation</th>
+              <th>Source</th>
               <th>Preneur</th>
               <th>Consommé</th>
             </tr>
@@ -282,12 +331,23 @@ export default function Consommation() {
                       {h.projet}
                     </span>
                   </td>
-                  <td style={{fontFamily: 'monospace', fontWeight: 600}}>{h.reference}</td>
-                  <td>{h.designation}</td>
+                  <td style={{fontFamily: 'monospace', fontWeight: 600}}>
+                    {h.reference}
+                    <div style={{fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: 'normal'}}>{h.designation}</div>
+                  </td>
+                  <td>
+                    <span className="badge" style={{
+                      backgroundColor: h.source === 'Stock principal' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                      color: h.source === 'Stock principal' ? 'var(--danger-color)' : '#10b981',
+                      border: 'none'
+                    }}>
+                      {h.source}
+                    </span>
+                  </td>
                   <td>{h.preneur}</td>
                   <td style={{fontWeight: 700, color: 'var(--danger-color)'}}>
                     -{h.longueur_utilisee > 0 
-                        ? (h.quantite_utilisee > 0 ? `${h.quantite_utilisee} ${h.quantite_utilisee > 1 ? 'barres' : 'barre'} (${h.longueur_utilisee}m)` : `${h.longueur_utilisee}m (chute)`) 
+                        ? (h.quantite_utilisee > 0 ? `${h.quantite_utilisee} ${h.quantite_utilisee > 1 ? 'barres' : 'barre'} (${h.longueur_utilisee}m)` : `${h.longueur_utilisee}m`) 
                         : `${h.quantite_utilisee} Unité(s)`}
                   </td>
                 </tr>
@@ -297,7 +357,7 @@ export default function Consommation() {
         </table>
       </div>
 
-      {isModalOpen && (
+      {modalMode !== null && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
           background: 'rgba(17, 24, 39, 0.4)', backdropFilter: 'blur(4px)',
@@ -305,13 +365,15 @@ export default function Consommation() {
         }}>
           <div className="glass-panel" style={{width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', margin: '2rem', padding: '3rem'}}>
             <button 
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => setModalMode(null)}
               style={{position: 'absolute', right: '1.5rem', top: '1.5rem', background: 'transparent', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: '0.5rem', borderRadius: '50%', transition: '0.2s'}}
             >
               <X size={24} />
             </button>
             
-            <h2 style={{fontSize: '1.5rem', fontWeight: 800, margin: '0 0 2rem 0', letterSpacing: '-0.5px'}}>Consommer du Stock</h2>
+            <h2 style={{fontSize: '1.5rem', fontWeight: 800, margin: '0 0 2rem 0', letterSpacing: '-0.5px'}}>
+              {modalMode === 'principal' ? 'Consommer du Stock Principal' : 'Consommer une Chute'}
+            </h2>
             
             {status && (
               <div style={{
@@ -325,123 +387,162 @@ export default function Consommation() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={modalMode === 'principal' ? handleSubmitPrincipal : handleSubmitChute}>
               <div style={{display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '2.5rem'}}>
-                <div>
-                  <label>Code Client (Projet)</label>
-                  <input 
-                    type="text"
-                    list="projets-list"
-                    value={projetCode} 
-                    onChange={e => setProjetCode(e.target.value)}
-                    placeholder="Sélectionnez ou créez un code client..."
-                  />
-                  <datalist id="projets-list">
-                    {projets.map(p => (
-                      <option key={p.id} value={p.code_projet} />
-                    ))}
-                  </datalist>
-                  {isProjetTermine ? (
-                    <div style={{marginTop: '0.5rem', color: 'var(--danger-color)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                      <AlertCircle size={14} /> Ce projet est terminé. Vous ne pouvez plus consommer de matière dessus.
-                    </div>
-                  ) : (
-                    <span style={{fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'block', marginTop: '0.25rem'}}>
-                      S'il n'existe pas, tapez un nouveau nom, il sera créé automatiquement.
-                    </span>
-                  )}
-                </div>
                 
-                <div style={{display: 'grid', gridTemplateColumns: isBarre ? '2fr 1fr' : '1fr', gap: '1rem'}}>
+                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem'}}>
                   <div>
-                    <label>Article à consommer</label>
+                    <label>Code Client (Projet)</label>
                     <input 
                       type="text"
-                      list="materiaux-list"
-                      value={materiauRef}
-                      onChange={e => setMateriauRef(e.target.value)}
-                      placeholder="Code de l'article (ex: KCL104)"
-                      style={{borderColor: (materiauRef !== '' && matchingMateriaux.length === 0) ? 'var(--danger-color)' : ''}}
+                      list="projets-list"
+                      value={projetCode} 
+                      onChange={e => setProjetCode(e.target.value)}
+                      placeholder="Sélectionnez ou créez un code..."
                     />
-                    <datalist id="materiaux-list">
-                      {uniqueMateriaux.map(m => (
-                        <option key={m.reference} value={m.reference}>{m.designation}</option>
+                    <datalist id="projets-list">
+                      {projets.map(p => (
+                        <option key={p.id} value={p.code_projet} />
                       ))}
                     </datalist>
-                    {materiauRef !== '' && matchingMateriaux.length === 0 && (
+                    {isProjetTermine && (
                       <div style={{marginTop: '0.5rem', color: 'var(--danger-color)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                        <AlertCircle size={14} /> Article inconnu.
+                        <AlertCircle size={14} /> Projet terminé.
                       </div>
                     )}
                   </div>
 
-                  {isBarre && (
-                    <div>
-                      <label>Couleur</label>
-                      <select 
-                        value={couleur}
-                        onChange={e => setCouleur(e.target.value)}
-                        style={{width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--input-border)', background: 'var(--input-bg)'}}
-                      >
-                        {matchingMateriaux.map(m => (
-                          <option key={m.materiau_id} value={m.categorie_ou_couleur}>{m.categorie_ou_couleur}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <div>
+                    <label>Date de consommation</label>
+                    <input 
+                      type="date" 
+                      value={dateConsommation}
+                      onChange={e => setDateConsommation(e.target.value)}
+                      required
+                      style={{width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--input-border)', background: 'var(--input-bg)', color: 'var(--text-primary)', fontFamily: 'inherit', fontSize: '0.95rem'}}
+                    />
+                  </div>
                 </div>
 
-                {isBarre && selectedMateriau && (
-                  <div style={{
-                    padding: '0.75rem 1rem', 
-                    borderRadius: 'var(--radius-md)', 
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    background: isRupture ? 'var(--danger-light)' : (isInsuffisant ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)'),
-                    border: isRupture ? '1px solid rgba(239, 68, 68, 0.2)' : (isInsuffisant ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)'),
-                  }}>
-                    <span style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)'}}>Stock disponible ({selectedMateriau.categorie_ou_couleur}) :</span>
-                    <span style={{
-                      fontSize: '1rem', fontWeight: 800,
-                      color: isRupture ? 'var(--danger-color)' : (isInsuffisant ? '#d97706' : '#10b981')
-                    }}>
-                      {stockDisponible} barre(s)
-                    </span>
-                  </div>
-                )}
-                
-                {isRupture && (
-                  <div style={{color: 'var(--danger-color)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '-0.5rem'}}>
-                    <AlertCircle size={14} /> Couleur non disponible en stock.
-                  </div>
-                )}
-
-                {isInsuffisant && !isRupture && (
-                  <div style={{color: 'var(--danger-color)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '-0.5rem'}}>
-                    <AlertCircle size={14} /> Stock insuffisant. Demandé : {quantiteBarres} barre(s).
-                  </div>
-                )}
-
-                {selectedMateriau && (
+                {modalMode === 'principal' ? (
                   <>
-                    {isBarre && (
+                    <div style={{display: 'grid', gridTemplateColumns: isBarre ? '2fr 1fr' : '1fr', gap: '1rem'}}>
                       <div>
-                        <label>Nombre de Barres (Quantité)</label>
+                        <label>Article à consommer</label>
                         <input 
-                          type="number" min="1" step="1"
-                          value={quantiteBarres}
-                          onChange={e => setQuantiteBarres(Number(e.target.value))}
+                          type="text"
+                          list="materiaux-list"
+                          value={materiauRef}
+                          onChange={e => setMateriauRef(e.target.value)}
+                          placeholder="Code de l'article (ex: KCL104)"
+                          style={{borderColor: (materiauRef !== '' && matchingMateriaux.length === 0) ? 'var(--danger-color)' : ''}}
                         />
+                        <datalist id="materiaux-list">
+                          {uniqueMateriaux.map(m => (
+                            <option key={m.reference} value={m.reference}>{m.designation}</option>
+                          ))}
+                        </datalist>
+                        {materiauRef !== '' && matchingMateriaux.length === 0 && (
+                          <div style={{marginTop: '0.5rem', color: 'var(--danger-color)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                            <AlertCircle size={14} /> Article inconnu.
+                          </div>
+                        )}
+                      </div>
+
+                      {isBarre && (
+                        <div>
+                          <label>Couleur</label>
+                          <select 
+                            value={couleur}
+                            onChange={e => setCouleur(e.target.value)}
+                            style={{width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--input-border)', background: 'var(--input-bg)'}}
+                          >
+                            {matchingMateriaux.map(m => (
+                              <option key={m.materiau_id} value={m.categorie_ou_couleur}>{m.categorie_ou_couleur}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {isBarre && selectedMateriau && (
+                      <div style={{
+                        padding: '0.75rem 1rem', 
+                        borderRadius: 'var(--radius-md)', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        background: isRupture ? 'var(--danger-light)' : (isInsuffisant ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)'),
+                        border: isRupture ? '1px solid rgba(239, 68, 68, 0.2)' : (isInsuffisant ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(16, 185, 129, 0.2)'),
+                      }}>
+                        <span style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-secondary)'}}>Stock disponible ({selectedMateriau.categorie_ou_couleur}) :</span>
+                        <span style={{
+                          fontSize: '1rem', fontWeight: 800,
+                          color: isRupture ? 'var(--danger-color)' : (isInsuffisant ? '#d97706' : '#10b981')
+                        }}>
+                          {stockDisponible} barre(s)
+                        </span>
                       </div>
                     )}
+                    
+                    {isRupture && (
+                      <div style={{color: 'var(--danger-color)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '-0.5rem'}}>
+                        <AlertCircle size={14} /> Couleur non disponible.
+                      </div>
+                    )}
+
+                    {isInsuffisant && !isRupture && (
+                      <div style={{color: 'var(--danger-color)', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '-0.5rem'}}>
+                        <AlertCircle size={14} /> Stock insuffisant.
+                      </div>
+                    )}
+
+                    {selectedMateriau && (
+                      <>
+                        {isBarre ? (
+                          <div>
+                            <label>Nombre de Barres (Barres complètes déduites)</label>
+                            <input 
+                              type="number" min="1" step="1"
+                              value={quantiteBarres}
+                              onChange={e => setQuantiteBarres(Number(e.target.value))}
+                            />
+                            <span style={{fontSize: '0.8rem', color: 'var(--text-tertiary)', display: 'block', marginTop: '0.25rem'}}>La consommation correspond toujours à une barre complète (6m).</span>
+                          </div>
+                        ) : (
+                          <div>
+                            <label>Quantité (unités)</label>
+                            <input 
+                              type="number" min="0" step="1"
+                              value={valeur}
+                              onChange={e => setValeur(e.target.value ? Number(e.target.value) : '')}
+                              style={{borderColor: valeurError ? 'var(--danger-color)' : ''}}
+                            />
+                            {valeurError && <div style={{color: 'var(--danger-color)', fontSize: '0.85rem', marginTop: '0.2rem'}}>{valeurError}</div>}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
                     <div>
-                      <label>{isBarre ? 'Longueur à couper par barre (mètres)' : 'Quantité (unités)'}</label>
-                      <input 
-                        type="number" min="0" step={isBarre ? "0.01" : "1"}
-                        value={valeur}
-                        onChange={e => setValeur(e.target.value ? Number(e.target.value) : '')}
-                        style={{borderColor: valeurError ? 'var(--danger-color)' : ''}}
-                      />
-                      {valeurError && <div style={{color: 'var(--danger-color)', fontSize: '0.85rem', marginTop: '0.2rem'}}>{valeurError}</div>}
+                      <label>Chute à consommer</label>
+                      <select 
+                        value={selectedChuteId}
+                        onChange={e => setSelectedChuteId(e.target.value ? Number(e.target.value) : '')}
+                        style={{width: '100%', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--input-border)', background: 'var(--input-bg)'}}
+                      >
+                        <option value="">-- Sélectionnez une chute disponible --</option>
+                        {chutes.map(c => (
+                          <option key={c.chute_id} value={c.chute_id}>
+                            {c.reference} - {c.designation} {c.couleur ? `(${c.couleur})` : ''} - {c.longueur_restante}m
+                          </option>
+                        ))}
+                      </select>
+                      {chutes.length === 0 && (
+                        <div style={{marginTop: '0.5rem', color: '#d97706', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
+                          <AlertCircle size={14} /> Aucune chute disponible.
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -458,13 +559,19 @@ export default function Consommation() {
               </div>
 
               <div style={{marginTop: '3rem', display: 'flex', justifyContent: 'flex-end', gap: '1rem'}}>
-                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>
+                <button type="button" className="btn-secondary" onClick={() => setModalMode(null)}>
                   Annuler
                 </button>
                 <button 
                   type="submit" 
                   className="btn-primary" 
-                  disabled={submitting || isProjetTermine || (materiauRef !== '' && !selectedMateriau) || isRupture || isInsuffisant || valeurError !== '' || !preneur.trim()}
+                  disabled={
+                    submitting || 
+                    isProjetTermine || 
+                    !preneur.trim() || 
+                    (modalMode === 'principal' && (!materiauRef.trim() || (materiauRef !== '' && !selectedMateriau) || isRupture || isInsuffisant || valeurError !== '')) || 
+                    (modalMode === 'chutes' && selectedChuteId === '')
+                  }
                 >
                   <CheckCircle size={18} />
                   {submitting ? 'Validation...' : 'Confirmer Consommation'}
