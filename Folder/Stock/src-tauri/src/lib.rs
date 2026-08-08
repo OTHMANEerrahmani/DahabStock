@@ -39,7 +39,8 @@ pub fn run() {
             controllers::projet::get_projets_suivi,
             controllers::projet::update_projet_statut,
             get_stock_chutes,
-            add_chute_manually
+            add_chute_manually,
+            controllers::documents::save_pdf_document
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

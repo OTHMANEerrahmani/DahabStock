@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { openPath } from '@tauri-apps/plugin-opener';
 import { Scissors, CheckCircle, AlertCircle, X, Search, Archive, Plus, ChevronDown, ChevronRight, Printer } from 'lucide-react';
 import BonDeSortiePrint from '../components/BonDeSortiePrint';
 import { jsPDF } from 'jspdf';
@@ -86,6 +87,7 @@ export default function Consommation() {
   const [expandedOpId, setExpandedOpId] = useState<string | null>(null);
   
   const [successOperationId, setSuccessOperationId] = useState<string | null>(null);
+  const [savedPdfPath, setSavedPdfPath] = useState<string | null>(null);
   const [printData, setPrintData] = useState<any>(null);
 
   useEffect(() => {
@@ -329,9 +331,13 @@ export default function Consommation() {
     });
   };
 
-  const handleGeneratePDF = async (opId: string | null = null) => {
+  const handleGeneratePDF = async (opId: string | null = null, printDataRef: any = null) => {
     const element = document.getElementById('bon-de-sortie-print-container');
     if (!element) return;
+    
+    // Fallback to state if not provided
+    const data = printDataRef || printData;
+    const filename = data ? `Bon_Sortie_${data.operationId}_${data.projet}_${data.date}.pdf` : `Bon_De_Sortie_${opId || 'Document'}.pdf`;
     
     try {
       const canvas = await html2canvas(element, { scale: 2 });
@@ -342,9 +348,29 @@ export default function Consommation() {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Bon_De_Sortie_${opId || 'Document'}.pdf`);
+      
+      const pdfArrayBuffer = pdf.output('arraybuffer');
+      const payload = {
+        filename,
+        data: Array.from(new Uint8Array(pdfArrayBuffer))
+      };
+      
+      const response: string = await invoke('save_pdf_document', { payload });
+      const parsed = JSON.parse(response);
+      
+      if (parsed.status === 'success') {
+        setStatus({ 
+          type: 'success', 
+          msg: `Bon de sortie enregistré avec succès.`
+        });
+        setSavedPdfPath(parsed.path);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        setStatus({ type: 'error', msg: `Erreur lors de l'enregistrement: ${parsed.error}` });
+      }
     } catch (err) {
       console.error('Erreur lors de la génération du PDF:', err);
+      setStatus({ type: 'error', msg: `Erreur lors de la génération du PDF: ${String(err)}` });
     }
   };
 
@@ -503,7 +529,7 @@ export default function Consommation() {
                               <h4 style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Détails de l'opération</h4>
                               <button 
                                 onClick={() => {
-                                  setPrintData({
+                                  const historyPrintData = {
                                     operationId: group.operation_id,
                                     date: group.date,
                                     projet: group.projet,
@@ -515,8 +541,9 @@ export default function Consommation() {
                                       quantite_utilisee: item.quantite_utilisee,
                                       longueur_utilisee: item.longueur_utilisee
                                     }))
-                                  });
-                                  setTimeout(() => handleGeneratePDF(group.operation_id), 100);
+                                  };
+                                  setPrintData(historyPrintData);
+                                  setTimeout(() => handleGeneratePDF(group.operation_id, historyPrintData), 100);
                                 }}
                                 className="btn-secondary" 
                                 style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
@@ -570,10 +597,10 @@ export default function Consommation() {
             
             {status && (
               <div style={{ padding: '1.5rem', marginBottom: '1.5rem', borderRadius: 'var(--radius-md)', backgroundColor: status.type === 'success' ? 'var(--success-light)' : 'var(--danger-light)', color: status.type === 'success' ? 'var(--text-primary)' : 'var(--danger-color)', border: `1px solid ${status.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)'}` }}>
-                <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: successOperationId ? '1rem' : '0', color: status.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)' }}>
+                <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: (successOperationId || savedPdfPath) ? '1rem' : '0', color: status.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)', whiteSpace: 'pre-line', lineHeight: '1.5' }}>
                   {status.msg}
                 </div>
-                {successOperationId && (
+                {successOperationId && !savedPdfPath && (
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
                     <button 
                       onClick={() => setTimeout(() => handleGeneratePDF(successOperationId), 100)}
@@ -584,7 +611,24 @@ export default function Consommation() {
                       Générer le Bon de Sortie
                     </button>
                     <button 
-                      onClick={() => { setSuccessOperationId(null); setStatus(null); }}
+                      onClick={() => { setSuccessOperationId(null); setSavedPdfPath(null); setStatus(null); }}
+                      className="btn-secondary"
+                    >
+                      Nouvelle Consommation
+                    </button>
+                  </div>
+                )}
+                {savedPdfPath && (
+                  <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
+                    <button 
+                      onClick={() => openPath(savedPdfPath)}
+                      className="btn-primary" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      📄 Ouvrir le PDF
+                    </button>
+                    <button 
+                      onClick={() => { setSuccessOperationId(null); setSavedPdfPath(null); setStatus(null); }}
                       className="btn-secondary"
                     >
                       Nouvelle Consommation

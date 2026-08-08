@@ -5,3 +5,4 @@ pub mod perte;
 pub mod projet;
 pub mod reception;
 pub mod stock;
+pub mod documents;
