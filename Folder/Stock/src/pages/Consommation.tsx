@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { openPath } from '@tauri-apps/plugin-opener';
-import { Scissors, CheckCircle, AlertCircle, X, Search, Archive, Plus, ChevronDown, ChevronRight, Printer } from 'lucide-react';
+import { Scissors, CheckCircle, AlertCircle, X, Search, Archive, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import BonDeSortiePrint from '../components/BonDeSortiePrint';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -331,7 +331,7 @@ export default function Consommation() {
     });
   };
 
-  const handleGeneratePDF = async (opId: string | null = null, printDataRef: any = null) => {
+  const handleGeneratePDF = async (opId: string | null = null, printDataRef: any = null, action: 'download' | 'print' = 'download') => {
     const element = document.getElementById('bon-de-sortie-print-container');
     if (!element) return;
     
@@ -352,19 +352,26 @@ export default function Consommation() {
       const pdfArrayBuffer = pdf.output('arraybuffer');
       const payload = {
         filename,
-        data: Array.from(new Uint8Array(pdfArrayBuffer))
+        data: Array.from(new Uint8Array(pdfArrayBuffer)),
+        is_temp: action === 'print'
       };
       
       const response: string = await invoke('save_pdf_document', { payload });
       const parsed = JSON.parse(response);
       
       if (parsed.status === 'success') {
-        setStatus({ 
-          type: 'success', 
-          msg: `Bon de sortie enregistré avec succès.`
-        });
-        setSavedPdfPath(parsed.path);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        if (action === 'download') {
+          setStatus({ 
+            type: 'success', 
+            msg: `Bon de sortie enregistré avec succès.`
+          });
+          setSavedPdfPath(parsed.path);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (action === 'print') {
+          if (!savedPdfPath && !status) {
+             setStatus({ type: 'success', msg: `Document envoyé pour impression.` });
+          }
+        }
       } else {
         setStatus({ type: 'error', msg: `Erreur lors de l'enregistrement: ${parsed.error}` });
       }
@@ -543,13 +550,36 @@ export default function Consommation() {
                                     }))
                                   };
                                   setPrintData(historyPrintData);
-                                  setTimeout(() => handleGeneratePDF(group.operation_id, historyPrintData), 100);
+                                  setTimeout(() => handleGeneratePDF(group.operation_id, historyPrintData, 'download'), 100);
                                 }}
                                 className="btn-secondary" 
                                 style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
                               >
-                                <Printer size={14} />
-                                Télécharger Bon de sortie
+                                📄 Télécharger PDF
+                              </button>
+                              
+                              <button 
+                                onClick={() => {
+                                  const historyPrintData = {
+                                    operationId: group.operation_id,
+                                    date: group.date,
+                                    projet: group.projet,
+                                    preneur: group.preneur,
+                                    lignes: group.items.map(item => ({
+                                      type: item.source.includes('Barre') ? 'Barre Aluminium' : (item.source.includes('Chute') ? 'Barre Aluminium (Chute)' : 'Accessoire'),
+                                      reference: item.reference,
+                                      designation: item.designation,
+                                      quantite_utilisee: item.quantite_utilisee,
+                                      longueur_utilisee: item.longueur_utilisee
+                                    }))
+                                  };
+                                  setPrintData(historyPrintData);
+                                  setTimeout(() => handleGeneratePDF(group.operation_id, historyPrintData, 'print'), 100);
+                                }}
+                                className="btn-primary" 
+                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                              >
+                                🖨 Imprimer
                               </button>
                             </div>
                             <table style={{width: '100%'}}>
@@ -603,12 +633,18 @@ export default function Consommation() {
                 {successOperationId && !savedPdfPath && (
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '1rem' }}>
                     <button 
-                      onClick={() => setTimeout(() => handleGeneratePDF(successOperationId), 100)}
+                      onClick={() => setTimeout(() => handleGeneratePDF(successOperationId, null, 'download'), 100)}
+                      className="btn-secondary" 
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      📄 Télécharger PDF
+                    </button>
+                    <button 
+                      onClick={() => setTimeout(() => handleGeneratePDF(successOperationId, null, 'print'), 100)}
                       className="btn-primary" 
                       style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}
                     >
-                      <Printer size={18} />
-                      Générer le Bon de Sortie
+                      🖨 Imprimer
                     </button>
                     <button 
                       onClick={() => { setSuccessOperationId(null); setSavedPdfPath(null); setStatus(null); }}
