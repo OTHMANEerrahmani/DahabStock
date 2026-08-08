@@ -17,7 +17,7 @@ pub struct SavePdfResponse {
 }
 
 #[tauri::command]
-pub async fn save_pdf_document(payload: SavePdfPayload) -> Result<String, String> {
+pub async fn save_pdf_document(app: tauri::AppHandle, payload: SavePdfPayload) -> Result<String, String> {
     // Define base directory based on OS
     let base_dir = if cfg!(target_os = "windows") {
         PathBuf::from("C:\\")
@@ -57,29 +57,9 @@ pub async fn save_pdf_document(payload: SavePdfPayload) -> Result<String, String
     }
 
     if payload.is_temp.unwrap_or(false) {
-        let mut success = false;
-        #[cfg(target_os = "windows")]
-        {
-            if let Ok(_) = std::process::Command::new("powershell")
-                .args([
-                    "-WindowStyle", "Hidden",
-                    "-Command",
-                    &format!("Start-Process -FilePath '{}' -Verb Print", file_path.to_string_lossy())
-                ])
-                .spawn()
-            {
-                success = true;
-            }
-        }
-        #[cfg(not(target_os = "windows"))]
-        {
-            if let Ok(_) = std::process::Command::new("open")
-                .arg(&file_path)
-                .spawn()
-            {
-                success = true;
-            }
-        }
+        use tauri_plugin_opener::OpenerExt;
+
+        let success = app.opener().open_path(file_path.to_string_lossy().to_string(), None::<&str>).is_ok();
         
         if !success {
             let res = SavePdfResponse {
